@@ -103,7 +103,7 @@ def _next_capt(board, disc_pos):
 
     return positions
 
-def _update_board_single_capt(board, prev_pos, next_pos):
+def _update_board(board, prev_pos, next_pos):
     """
         Update the board with a single capturing move.
 
@@ -137,10 +137,11 @@ def _update_board_single_capt(board, prev_pos, next_pos):
     s[prev_col] = "_"
     new_board[prev_row] = "".join(s)
 
-    # Empty intermediary position
-    s = list(new_board[(next_row + prev_row) / 2])
-    s[(next_col + prev_col) / 2] = "_"
-    new_board[(next_row + prev_row) / 2] = "".join(s)
+    # Empty intermediary position if it's a capturing move
+    if abs(next_row - prev_row) == 2:
+        s = list(new_board[(next_row + prev_row) / 2])
+        s[(next_col + prev_col) / 2] = "_"
+        new_board[(next_row + prev_row) / 2] = "".join(s)
 
     return new_board
 
@@ -223,7 +224,7 @@ def allowed_moves(board, color):
                 for i in range(0, len(pos_steps) - 1):
                     prev_pos = pos_steps[i]
                     next_pos = pos_steps[i + 1]
-                    new_board = _update_board_single_capt(new_board,
+                    new_board = _update_board(new_board,
                         prev_pos, next_pos)
 
                 # Check remaining capturing moves
@@ -245,6 +246,8 @@ def play(board, color):
         Play must return the next move to play.
         You can define here any strategy you would find suitable.
     """
+    # Retrieve all the possible moves
+    moves = allowed_moves(board, color)
     return random_play(board, color)
 
 def random_play(board, color):
