@@ -1,5 +1,149 @@
 import random
 
+def _get_player_discs(board, color):
+    """
+        Find all the discs belonging to the next player.
+
+        Arguments:
+        - board: the content of the board
+        - color: the next player's color
+
+        Return value:
+        - discs_pos: list of all discs position stored as [row, col]
+    """
+    discs_pos = []
+
+    for row in range(0, 8):
+        line = board[row].lower() # remove kings
+        col = -1
+        while line.find(color, col + 1) != -1:
+            col = line.find(color, col + 1)
+            discs_pos.append([row, col])
+
+    return discs_pos
+
+def _next_non_capt(board, disc_pos):
+    """
+        Find all possible next non capturing positions.
+
+        Arguments:
+        - board: the content of the board
+        - disc_pos: the position of the player disc
+
+        Return value:
+        A list of valid non capturing moves.
+    """
+    # Get the disc attributes
+    row, col = disc_pos
+    color = board[row].lower()[col]
+    king = False if board[row][col] == color else True
+
+    if king:
+        # Define the four diagonal positions
+        bot_left  = [[row + 1, col - 1]] if col > 0 and row < 7 else []
+        bot_right = [[row + 1, col + 1]] if col < 7 and row < 7 else []
+        top_left  = [[row - 1, col - 1]] if col > 0 and row > 0 else []
+        top_right = [[row - 1, col + 1]] if col < 7 and row > 0 else []
+        positions = top_left + top_right + bot_left + bot_right
+    else:
+        # Define the forward direction
+        fwd = 1 if color == "b" else -1
+
+        # Define the two left and right position
+        f_row = row + fwd
+        left  = [[f_row, col - 1]] if col > 0 and f_row in range(0, 8) else []
+        right = [[f_row, col + 1]] if col < 7 and f_row in range(0, 8) else []
+        positions = left + right
+
+    # Check that the moves are indeed possible
+    positions = [p for p in positions if board[p[0]][p[1]] == "_"]
+
+    return positions
+
+def _next_capt(board, disc_pos):
+    """
+        Find all possible next capturing positions.
+
+        Arguments:
+        - board: the content of the board
+        - disc_pos: the position of the player disc
+
+        Return value:
+        A list of valid capturing moves.
+    """
+    # Get the disc attributes
+    row, col = disc_pos
+    color = board[row].lower()[col]
+    king = False if board[row][col] == color else True
+
+    if king:
+        # Define the four diagonal positions
+        bot_left  = [[row + 2, col - 2]] if col > 1 and row < 6 else []
+        bot_right = [[row + 2, col + 2]] if col < 6 and row < 6 else []
+        top_left  = [[row - 2, col - 2]] if col > 1 and row > 1 else []
+        top_right = [[row - 2, col + 2]] if col < 6 and row > 1 else []
+        positions = top_left + top_right + bot_left + bot_right
+    else:
+        # Define the forward direction
+        fwd = 1 if color == "b" else -1
+
+        # Define the two left and right position
+        f_row = row + 2 * fwd
+        left  = [[f_row, col - 2]] if col > 1 and f_row in range(0, 8) else []
+        right = [[f_row, col + 2]] if col < 6 and f_row in range(0, 8) else []
+        positions = left + right
+
+    # Check that the landing positions is empty
+    positions = [p for p in positions if board[p[0]][p[1]] == "_"]
+
+    # Check that the inbetween position is of the different color
+    positions = [p for p in positions \
+        if board[(row + p[0]) / 2][(col + p[1]) / 2].lower() \
+        not in ["_", color]]
+
+    return positions
+
+def _update_board_single_capt(board, prev_pos, next_pos):
+    """
+        Update the board with a single capturing move.
+
+        Arguments:
+        - prev_pos: position of the disc before the move
+        - next_pos: position of the disc after the move
+
+        Return value:
+        The updated board.
+    """
+    # Use new variables for clarity
+    prev_row, prev_col = prev_pos
+    next_row, next_col = next_pos
+    new_board = board
+    old_disc = board[prev_row][prev_col]
+    color = old_disc.lower()
+
+    # Update next position with previous position and look out for kings
+    if old_disc == "b":
+        new_disc = "B" if next_row == 7 else "b"
+    elif old_disc == "w":
+        new_disc = "W" if next_row == 0 else "w"
+    else:
+        new_disc = old_disc
+    s = list(new_board[next_row])
+    s[next_col] = new_disc
+    new_board[next_row] = "".join(s)
+
+    # Empty previous position
+    s = list(new_board[prev_row])
+    s[prev_col] = "_"
+    new_board[prev_row] = "".join(s)
+
+    # Empty intermediary position
+    s = list(new_board[(next_row + prev_row) / 2])
+    s[(next_col + prev_col) / 2] = "_"
+    new_board[(next_row + prev_row) / 2] = "".join(s)
+
+    return new_board
+
 def allowed_moves(board, color):
     """
         This is the first function you need to implement.
@@ -53,8 +197,48 @@ def allowed_moves(board, color):
             [(1, 2), (3, 4)]
         ]
     """
-    # TODO: Your turn now !
-    return []
+
+    # Retrieve next player discs position
+    discs_pos = _get_player_discs(board, color)
+
+    # Compute the possible moves
+    moves_non_capt = []
+    moves_capt = []
+    for disc_pos in discs_pos:
+        # Retrieve initial capturing positions
+        pos_capt_init = _next_capt(board, disc_pos)
+        if pos_capt_init != []:
+            # Define a queue to store all possible position sequences
+            mv_queue = [[disc_pos, p] for p in pos_capt_init]
+
+            # Pop an element from the queue, if there is no more capturing move
+            # then we add it to the final move list otherwise we had the new
+            # steps and add it to the queue.
+            while mv_queue != []:
+                # Get the first element from queue and initialize the board
+                pos_steps = mv_queue.pop(0)
+                new_board = board[:]
+
+                # Update the board up to the last position step
+                for i in range(0, len(pos_steps) - 1):
+                    prev_pos = pos_steps[i]
+                    next_pos = pos_steps[i + 1]
+                    new_board = _update_board_single_capt(new_board,
+                        prev_pos, next_pos)
+
+                # Check remaining capturing moves
+                pos_capt = _next_capt(new_board, next_pos)
+                if pos_capt == []:
+                    moves_capt += [pos_steps]
+                else:
+                    mv_queue += [pos_steps + [p] for p in pos_capt]
+
+        # Retrieve non capturing positions
+        if moves_capt == []:
+            pos_non_capt = _next_non_capt(board, disc_pos)
+            moves_non_capt += [[disc_pos, p] for p in pos_non_capt]
+
+    return moves_non_capt if moves_capt == [] else moves_capt
 
 def play(board, color):
     """
